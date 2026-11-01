@@ -9,7 +9,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 
 object IconResolver {
-    private val cache = LruCache<String, ImageBitmap>(180)
+    private val cache = LruCache<String, ImageBitmap>(200)
 
     fun clearCache() {
         cache.evictAll()
@@ -30,53 +30,58 @@ object IconResolver {
             val size = 192
             val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
+            val rect = RectF(4f, 4f, (size - 4).toFloat(), (size - 4).toFloat())
+            val corner = size * 0.28f
+
+            val clipPath = Path().apply {
+                addRoundRect(rect, corner, corner, Path.Direction.CW)
+            }
 
             if (!useDynamic) {
-                drawable.setBounds(0, 0, size, size)
+                val save = canvas.save()
+                canvas.clipPath(clipPath)
+                drawable.setBounds(4, 4, size - 4, size - 4)
                 drawable.draw(canvas)
+                canvas.restoreToCount(save)
             } else {
                 val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = containerColor
+                    shader = LinearGradient(
+                        0f, 0f, size.toFloat(), size.toFloat(),
+                        containerColor, tintColor, Shader.TileMode.CLAMP
+                    )
                     style = Paint.Style.FILL
                 }
-                canvas.drawOval(RectF(4f, 4f, (size - 4).toFloat(), (size - 4).toFloat()), bgPaint)
+                canvas.drawRoundRect(rect, corner, corner, bgPaint)
 
-                var drewMonochrome = false
+                var drewMono = false
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && drawable is AdaptiveIconDrawable) {
                     val mono = drawable.monochrome
                     if (mono != null) {
                         val mutated = mono.mutate()
-                        mutated.setBounds(-18, -18, size + 18, size + 18)
-                        mutated.colorFilter = PorterDuffColorFilter(tintColor, PorterDuff.Mode.SRC_IN)
+                        mutated.setBounds(-16, -16, size + 16, size + 16)
+                        mutated.colorFilter = PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
                         val save = canvas.save()
-                        val path = Path().apply {
-                            addOval(RectF(8f, 8f, (size - 8).toFloat(), (size - 8).toFloat()), Path.Direction.CW)
-                        }
-                        canvas.clipPath(path)
+                        canvas.clipPath(clipPath)
                         mutated.draw(canvas)
                         canvas.restoreToCount(save)
-                        drewMonochrome = true
+                        drewMono = true
                     }
                 }
 
-                if (!drewMonochrome) {
-                    val pad = 38
-                    val rawBmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-                    val rawCanvas = Canvas(rawBmp)
+                if (!drewMono) {
+                    val save = canvas.save()
+                    canvas.clipPath(clipPath)
+                    val pad = 26
                     drawable.setBounds(pad, pad, size - pad, size - pad)
-                    drawable.draw(rawCanvas)
+                    drawable.draw(canvas)
 
-                    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
-                    }
-                    canvas.drawBitmap(rawBmp, 0f, 0f, paint)
-
-                    val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         color = tintColor
-                        alpha = 110
+                        alpha = 75
                         xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
                     }
-                    canvas.drawOval(RectF(4f, 4f, (size - 4).toFloat(), (size - 4).toFloat()), tintPaint)
+                    canvas.drawRoundRect(rect, corner, corner, overlayPaint)
+                    canvas.restoreToCount(save)
                 }
             }
 

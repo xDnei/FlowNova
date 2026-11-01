@@ -32,10 +32,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -145,6 +144,65 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@Composable
+fun S23WaveWallpaper(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color(0xFF060A12), Color(0xFF0B1528), Color(0xFF05070B))
+            )
+        )
+
+        val wavePath = Path().apply {
+            moveTo(0f, h * 0.58f)
+            cubicTo(
+                w * 0.28f, h * 0.44f,
+                w * 0.62f, h * 0.24f,
+                w * 1.05f, h * 0.14f
+            )
+            lineTo(w, h * 0.65f)
+            cubicTo(
+                w * 0.65f, h * 0.52f,
+                w * 0.30f, h * 0.68f,
+                0f, h * 0.78f
+            )
+            close()
+        }
+
+        drawPath(
+            path = wavePath,
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFF1E40AF).copy(alpha = 0.85f),
+                    Color(0xFF3B82F6).copy(alpha = 0.55f),
+                    Color(0xFF0F172A).copy(alpha = 0.9f)
+                ),
+                start = Offset(w * 0.85f, h * 0.18f),
+                end = Offset(w * 0.1f, h * 0.72f)
+            )
+        )
+
+        val highlightCurve = Path().apply {
+            moveTo(0f, h * 0.58f)
+            cubicTo(
+                w * 0.28f, h * 0.44f,
+                w * 0.62f, h * 0.24f,
+                w * 1.05f, h * 0.14f
+            )
+        }
+        drawPath(
+            path = highlightCurve,
+            brush = Brush.horizontalGradient(
+                listOf(Color.Transparent, Color(0xFF93C5FD).copy(alpha = 0.65f), Color(0xFF60A5FA))
+            ),
+            style = Stroke(width = 4.dp.toPx())
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FlowNovaRoot(
@@ -159,6 +217,8 @@ fun FlowNovaRoot(
     var allApps by remember { mutableStateOf<List<AppItem>>(emptyList()) }
     var showDrawer by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showGesturesShowcase by remember { mutableStateOf(false) }
+    var showDynamicIconsShowcase by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedAppMenu by remember { mutableStateOf<AppItem?>(null) }
     var openedFolder by remember { mutableStateOf<FolderItem?>(null) }
@@ -170,6 +230,8 @@ fun FlowNovaRoot(
         when {
             selectedAppMenu != null -> selectedAppMenu = null
             openedFolder != null -> openedFolder = null
+            showGesturesShowcase -> showGesturesShowcase = false
+            showDynamicIconsShowcase -> showDynamicIconsShowcase = false
             showSettings -> showSettings = false
             showDrawer -> {
                 showDrawer = false
@@ -191,10 +253,19 @@ fun FlowNovaRoot(
             allApps = list
 
             if (settings.favoritePackages.isEmpty() && list.isNotEmpty()) {
+                val preferredKeywords = listOf(
+                    "vending", "youtube", "gm", "apps.photos",
+                    "chrome", "spotify", "whatsapp", "telegram"
+                )
+                val matched = preferredKeywords.mapNotNull { key ->
+                    list.firstOrNull { it.packageName.contains(key, ignoreCase = true) }?.packageName
+                }
+                val finalFavs = (matched + list.map { it.packageName }).distinct().take(16)
                 onUpdateSettings(
                     settings.copy(
-                        favoritePackages = list.take(8).map { it.packageName },
-                        dockPackages = list.take(4).map { it.packageName }
+                        dynamicIconsGlobal = false,
+                        favoritePackages = finalFavs,
+                        dockPackages = list.take(2).map { it.packageName }
                     )
                 )
             }
@@ -216,13 +287,12 @@ fun FlowNovaRoot(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xCC0B132B), Color(0xBF1C2541), Color(0xE6050811))))
             .pointerInput(settings.swipeUpAction, settings.swipeDownAction) {
                 detectVerticalDragGestures(
                     onDragStart = { dragAccumulator = 0f },
                     onDragEnd = {
-                        if (dragAccumulator < -95f) executeGesture(settings.swipeUpAction)
-                        else if (dragAccumulator > 95f) executeGesture(settings.swipeDownAction)
+                        if (dragAccumulator < -90f) executeGesture(settings.swipeUpAction)
+                        else if (dragAccumulator > 90f) executeGesture(settings.swipeDownAction)
                         dragAccumulator = 0f
                     }
                 ) { _, dragAmount -> dragAccumulator += dragAmount }
@@ -234,6 +304,8 @@ fun FlowNovaRoot(
                 )
             }
     ) {
+        S23WaveWallpaper()
+
         HomeScreenContent(
             settings = settings,
             allApps = allApps,
@@ -274,7 +346,34 @@ fun FlowNovaRoot(
                 onUpdateSettings = onUpdateSettings,
                 onClose = { showSettings = false },
                 onPickWidget = onPickWidget,
-                onCreateFolder = { showCreateFolderDialog = true }
+                onCreateFolder = { showCreateFolderDialog = true },
+                onOpenGesturesScreen = { showGesturesShowcase = true },
+                onOpenDynamicIconsScreen = { showDynamicIconsShowcase = true }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = showGesturesShowcase,
+            enter = fadeIn(tween(animDuration)),
+            exit = fadeOut(tween(animDuration))
+        ) {
+            NativeGesturesShowcaseScreen(
+                settings = settings,
+                onUpdateSettings = onUpdateSettings,
+                onClose = { showGesturesShowcase = false }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = showDynamicIconsShowcase,
+            enter = fadeIn(tween(animDuration)),
+            exit = fadeOut(tween(animDuration))
+        ) {
+            DynamicIconsShowcaseScreen(
+                settings = settings,
+                allApps = allApps,
+                onUpdateSettings = onUpdateSettings,
+                onClose = { showDynamicIconsShowcase = false }
             )
         }
 
@@ -328,8 +427,8 @@ fun HomeScreenContent(
     onRemoveWidget: (Int) -> Unit
 ) {
     val context = LocalContext.current
-    var currentTime by remember { mutableStateOf("") }
-    var currentDate by remember { mutableStateOf("") }
+    var currentTime by remember { mutableStateOf("19:27") }
+    var currentDate by remember { mutableStateOf("Sáb., 1 de Nov.") }
 
     LaunchedEffect(Unit) {
         val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -344,67 +443,128 @@ fun HomeScreenContent(
 
     val favoriteApps = remember(allApps, settings.favoritePackages) {
         val map = allApps.associateBy { it.packageName }
-        settings.favoritePackages.mapNotNull { map[it] }
+        val favs = settings.favoritePackages.mapNotNull { map[it] }
+        if (favs.isNotEmpty()) favs else allApps.take(16)
     }
 
-    val dockApps = remember(allApps, settings.dockPackages) {
-        val map = allApps.associateBy { it.packageName }
-        settings.dockPackages.mapNotNull { map[it] }.take(4)
+    val pageCapacity = 8
+    val pages = remember(favoriteApps) {
+        if (favoriteApps.isEmpty()) listOf(emptyList(), emptyList())
+        else {
+            val chunked = favoriteApps.chunked(pageCapacity)
+            if (chunked.size == 1) listOf(chunked[0], emptyList()) else chunked
+        }
     }
-
-    val pageCapacity = (settings.homeColumns * (settings.homeRows - 2)).coerceAtLeast(4)
-    val pages = remember(favoriteApps, pageCapacity) {
-        if (favoriteApps.isEmpty()) listOf(emptyList()) else favoriteApps.chunked(pageCapacity)
-    }
-    val pagerState = rememberPagerState(pageCount = { pages.size.coerceAtLeast(1) })
+    val pagerState = rememberPagerState(pageCount = { pages.size.coerceAtLeast(2) })
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 10.dp)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Column {
-                Text(currentDate, color = Color.White.copy(alpha = 0.85f), fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                Text(currentTime, color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.Light)
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.WbSunny, contentDescription = null, tint = Color(0xFFFFD54F), modifier = Modifier.size(22.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("22°C", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                }
-                Text(settings.locationLabel, color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
-            }
+        Spacer(modifier = Modifier.height(18.dp))
+
+        // Relógio Superior à Esquerda
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = currentDate,
+                color = Color.White.copy(alpha = 0.92f),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = currentTime,
+                color = Color.White,
+                fontSize = 58.sp,
+                fontWeight = FontWeight.Normal,
+                letterSpacing = (-1).sp
+            )
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
+        // Widget de Meteorologia Alinhado à Direita (22°C Cachoeiro de Itapemirim)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.End
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.WbSunny,
+                        contentDescription = null,
+                        tint = Color(0xFFFFCA28),
+                        modifier = Modifier
+                            .size(22.dp)
+                            .offset(x = (-5).dp, y = (-4).dp)
+                    )
+                    Icon(
+                        imageVector = Icons.Default.Cloud,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .offset(x = 4.dp, y = 3.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "22°C",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = settings.locationLabel,
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Normal
+            )
+        }
+
+        Spacer(modifier = Modifier.height(22.dp))
+
+        // Barra de Pesquisa Google (Cápsula Translúcida Escura com G, Microfone e Lens)
         Surface(
-            modifier = Modifier.fillMaxWidth().height(50.dp).clickable { onOpenDrawer() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.14f),
+                    shape = RoundedCornerShape(28.dp)
+                )
+                .clickable { onOpenDrawer() },
             shape = RoundedCornerShape(28.dp),
-            color = Color(0xFF1F2737).copy(alpha = 0.85f)
+            color = Color(0xFF232B3A).copy(alpha = 0.78f)
         ) {
             Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                GoogleGLogo(modifier = Modifier.size(24.dp))
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("G", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("Pesquisar apps...", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Icon(Icons.Default.CenterFocusStrong, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = "Pesquisa por voz",
+                        tint = Color(0xFF4285F4),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Icon(
+                        imageVector = Icons.Default.CenterFocusStrong,
+                        contentDescription = "Google Lens",
+                        tint = Color(0xFFFBBC05),
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
         }
@@ -415,7 +575,10 @@ fun HomeScreenContent(
                 val info = remember(widgetId) { appWidgetManager.getAppWidgetInfo(widgetId) }
                 if (info != null) {
                     Card(
-                        modifier = Modifier.fillMaxWidth().height(110.dp).combinedClickable(onClick = {}, onLongClick = { onRemoveWidget(widgetId) }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .combinedClickable(onClick = {}, onLongClick = { onRemoveWidget(widgetId) }),
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.25f))
                     ) {
@@ -429,7 +592,7 @@ fun HomeScreenContent(
         }
 
         if (settings.folders.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 settings.folders.take(settings.homeColumns).forEach { folder ->
                     FolderIconView(folder = folder, onClick = { onFolderClick(folder) })
@@ -437,78 +600,152 @@ fun HomeScreenContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        HorizontalPager(state = pagerState, modifier = Modifier.weight(1f)) { pageIndex ->
+        // Grelha Principal (2 linhas de 4 ícones Squircle igual à imagem)
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.weight(1f)
+        ) { pageIndex ->
             val pageApps = pages.getOrNull(pageIndex).orEmpty()
             LazyVerticalGrid(
                 columns = GridCells.Fixed(settings.homeColumns),
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 items(pageApps, key = { it.packageName }) { app ->
                     LauncherAppIcon(
                         app = app,
                         settings = settings,
-                        onClick = { context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) } },
+                        onClick = {
+                            context.packageManager.getLaunchIntentForPackage(app.packageName)?.let {
+                                context.startActivity(it)
+                            }
+                        },
                         onLongClick = { onAppLongClick(app) }
                     )
                 }
             }
         }
 
+        // Pontos Indicadores de Página
         if (settings.indicatorStyle != IndicatorStyle.HIDDEN) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 18.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val count = pages.size.coerceAtLeast(2)
-                for (i in 0 until count) {
+                val totalDots = pages.size.coerceAtLeast(2)
+                for (i in 0 until totalDots) {
                     val selected = i == pagerState.currentPage
-                    val width = if (settings.indicatorStyle == IndicatorStyle.PILL && selected) 20.dp else 7.dp
+                    val width = if (settings.indicatorStyle == IndicatorStyle.PILL && selected) 18.dp else 7.dp
                     Box(
-                        modifier = Modifier.padding(horizontal = 4.dp).height(7.dp).width(width).clip(CircleShape)
+                        modifier = Modifier
+                            .padding(horizontal = 4.dp)
+                            .height(7.dp)
+                            .width(width)
+                            .clip(CircleShape)
                             .background(if (selected) Color.White else Color.White.copy(alpha = 0.35f))
                     )
                 }
             }
         }
 
-        Surface(
-            modifier = Modifier.fillMaxWidth().height(78.dp),
-            shape = RoundedCornerShape(26.dp),
-            color = Color(0xFF141B29).copy(alpha = 0.78f)
+        // Dock Inferior com os 4 Ícones Squircle Coloridos (Telefone, Mensagens, Gaveta/App, Configurações)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                dockApps.take(3).forEach { app ->
-                    LauncherAppIcon(
-                        app = app,
-                        settings = settings,
-                        showLabel = false,
-                        onClick = { context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) } },
-                        onLongClick = { onAppLongClick(app) }
-                    )
+            // 1. Telefone (Squircle Azul)
+            DockSquircleButton(
+                background = Brush.linearGradient(listOf(Color(0xFF2B86FF), Color(0xFF1A66E5))),
+                icon = Icons.Default.Call,
+                onClick = {
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_DIAL).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK })
+                    }
                 }
-                Box(
-                    modifier = Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primaryContainer).clickable { onOpenDrawer() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Apps, contentDescription = "Gaveta", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(28.dp))
+            )
+
+            // 2. Mensagens (Squircle Azul Claro)
+            DockSquircleButton(
+                background = Brush.linearGradient(listOf(Color(0xFF4296FF), Color(0xFF2575FC))),
+                icon = Icons.Default.Chat,
+                onClick = {
+                    runCatching {
+                        val smsIntent = Intent(Intent.ACTION_MAIN).apply {
+                            addCategory(Intent.CATEGORY_APP_MESSAGING)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        context.startActivity(smsIntent)
+                    }.onFailure { onOpenDrawer() }
                 }
-                Box(
-                    modifier = Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable { onOpenSettings() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = "Configurações", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(26.dp))
-                }
-            }
+            )
+
+            // 3. Gaveta de Aplicações / Assistente (Squircle Roxo Vibrante)
+            DockSquircleButton(
+                background = Brush.linearGradient(listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9))),
+                icon = Icons.Default.Apps,
+                onClick = onOpenDrawer
+            )
+
+            // 4. Configurações do Launcher (Squircle Cinza-Azulado Escuro)
+            DockSquircleButton(
+                background = Brush.linearGradient(listOf(Color(0xFF4B5563), Color(0xFF374151))),
+                icon = Icons.Default.Settings,
+                onClick = onOpenSettings
+            )
         }
+    }
+}
+
+@Composable
+fun GoogleGLogo(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val stroke = size.width * 0.2f
+        val diameter = size.minDimension - stroke
+        val topLeft = Offset(stroke / 2, stroke / 2)
+        val arcSize = androidx.compose.ui.geometry.Size(diameter, diameter)
+
+        drawArc(Color(0xFFEA4335), -45f, -90f, false, topLeft, arcSize, style = Stroke(stroke))
+        drawArc(Color(0xFFFBBC05), 135f, 90f, false, topLeft, arcSize, style = Stroke(stroke))
+        drawArc(Color(0xFF34A853), 45f, 90f, false, topLeft, arcSize, style = Stroke(stroke))
+        drawArc(Color(0xFF4285F4), -45f, 90f, false, topLeft, arcSize, style = Stroke(stroke))
+        drawLine(
+            color = Color(0xFF4285F4),
+            start = Offset(size.width * 0.5f, size.height * 0.5f),
+            end = Offset(size.width * 0.92f, size.height * 0.5f),
+            strokeWidth = stroke
+        )
+    }
+}
+
+@Composable
+fun DockSquircleButton(
+    background: Brush,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(62.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(background)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(30.dp)
+        )
     }
 }
 
@@ -518,15 +755,18 @@ fun LauncherAppIcon(
     app: AppItem,
     settings: LauncherSettings,
     showLabel: Boolean = true,
+    forceDynamic: Boolean? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val useDynamicForThisApp = settings.dynamicIconsGlobal && !settings.keepOriginalIconPackages.contains(app.packageName)
-    val tintArgb = MaterialTheme.colorScheme.onSecondaryContainer.toArgb()
-    val containerArgb = MaterialTheme.colorScheme.secondaryContainer.toArgb()
+    val useDynamicForThisApp = forceDynamic ?: (settings.dynamicIconsGlobal && !settings.keepOriginalIconPackages.contains(app.packageName))
+    val tintArgb = Color(settings.palettePreset.primaryHex).toArgb()
+    val containerArgb = Color(settings.palettePreset.containerHex).toArgb()
 
-    var iconBitmap by remember(app.packageName, useDynamicForThisApp, tintArgb, containerArgb) { mutableStateOf<ImageBitmap?>(null) }
+    var iconBitmap by remember(app.packageName, useDynamicForThisApp, tintArgb, containerArgb) {
+        mutableStateOf<ImageBitmap?>(null)
+    }
 
     LaunchedEffect(app.packageName, useDynamicForThisApp, tintArgb, containerArgb) {
         withContext(Dispatchers.IO) {
@@ -534,25 +774,50 @@ fun LauncherAppIcon(
         }
     }
 
-    val baseSize: Dp = (56f * (settings.iconScalePercent / 100f)).dp
+    val baseSize: Dp = (60f * (settings.iconScalePercent / 100f)).dp
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clip(RoundedCornerShape(14.dp)).combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(vertical = 4.dp, horizontal = 2.dp)
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(vertical = 2.dp, horizontal = 2.dp)
     ) {
-        Box(modifier = Modifier.size(baseSize).clip(RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .size(baseSize)
+                .clip(RoundedCornerShape(18.dp)),
+            contentAlignment = Alignment.Center
+        ) {
             val bmp = iconBitmap
             if (bmp != null) {
-                Image(bitmap = bmp, contentDescription = app.label, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                Image(
+                    bitmap = bmp,
+                    contentDescription = app.label,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
             } else {
-                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.secondaryContainer, CircleShape), contentAlignment = Alignment.Center) {
-                    Text(app.label.take(1).uppercase(), color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF1E293B), RoundedCornerShape(18.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(app.label.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }
         if (showLabel) {
-            Spacer(modifier = Modifier.height(5.dp))
-            Text(app.label, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = app.label,
+                color = Color.White,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
@@ -561,13 +826,19 @@ fun LauncherAppIcon(
 fun FolderIconView(folder: FolderItem, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { onClick() }.padding(6.dp)
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+            .padding(6.dp)
     ) {
         Box(
-            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f)),
+            modifier = Modifier
+                .size(58.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color(0xFF1E293B).copy(alpha = 0.9f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Folder, contentDescription = folder.name, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(30.dp))
+            Icon(Icons.Default.Folder, contentDescription = folder.name, tint = Color(0xFF60A5FA), modifier = Modifier.size(30.dp))
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(folder.name, color = Color.White, fontSize = 12.sp, maxLines = 1)
@@ -588,38 +859,44 @@ fun AppDrawerScreen(
         if (searchQuery.isBlank()) allApps else allApps.filter { it.label.contains(searchQuery.trim(), ignoreCase = true) }
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xF2080B12)) {
+    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF07090E)) {
         Column(
-            modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchChange,
-                placeholder = { Text("Pesquisar apps", color = Color.White.copy(alpha = 0.55f)) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.8f)) },
+                placeholder = { Text("Pesquisar apps", color = Color.White.copy(alpha = 0.55f), fontSize = 15.sp) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.7f)) },
                 trailingIcon = {
-                    IconButton(onClick = { if (searchQuery.isNotEmpty()) onSearchChange("") else onClose() }) {
-                        Icon(Icons.Default.Close, contentDescription = "Fechar", tint = Color.White)
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { onSearchChange("") }) {
+                            Icon(Icons.Default.Close, contentDescription = "Limpar", tint = Color.White)
+                        }
                     }
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(28.dp),
                 modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFF1A2130),
-                    unfocusedContainerColor = Color(0xFF151B28),
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    focusedContainerColor = Color(0xFF171B24),
+                    unfocusedContainerColor = Color(0xFF171B24),
+                    focusedBorderColor = Color(0xFF3B82F6),
                     unfocusedBorderColor = Color.Transparent,
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White
                 )
             )
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(22.dp))
             LazyVerticalGrid(
-                columns = GridCells.Fixed(settings.drawerColumns),
+                columns = GridCells.Fixed(4),
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(filtered, key = { it.packageName }) { app ->
                     LauncherAppIcon(
@@ -643,46 +920,89 @@ fun LauncherSettingsScreen(
     onUpdateSettings: (LauncherSettings) -> Unit,
     onClose: () -> Unit,
     onPickWidget: () -> Unit,
-    onCreateFolder: () -> Unit
+    onCreateFolder: () -> Unit,
+    onOpenGesturesScreen: () -> Unit,
+    onOpenDynamicIconsScreen: () -> Unit
 ) {
     val context = LocalContext.current
     val isDefault = remember { SystemHelper.isDefaultLauncher(context) }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0B0E17)) {
+    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0A0D14)) {
         Column(
-            modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) { Icon(Icons.Default.ArrowBackIosNew, contentDescription = "Voltar", tint = Color.White) }
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Default.ArrowBackIosNew, contentDescription = "Voltar", tint = Color.White)
+                }
                 Text("Configurações do Launcher", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             }
             Spacer(modifier = Modifier.height(14.dp))
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2235))) {
-                Row(modifier = Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+
+            // Cartão Superior: Aparência / Personalize seu launcher
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenDynamicIconsScreen() },
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1C2338))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
-                        modifier = Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(Color(0xFF4FC3F7), Color(0xFF7C4DFF), Color(0xFF00E676)))),
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(Color(0xFF38BDF8), Color(0xFF6366F1), Color(0xFF4ADE80), Color(0xFFFACC15))
+                                )
+                            ),
                         contentAlignment = Alignment.Center
-                    ) { Icon(Icons.Default.Palette, contentDescription = null, tint = Color.White) }
-                    Spacer(modifier = Modifier.width(14.dp))
+                    ) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
                     Column {
-                        Text("Aparência", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                        Text("Personalize seu launcher • S23 Ultra", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                        Text("Aparência", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text("Personalize seu launcher", color = Color.White.copy(alpha = 0.72f), fontSize = 13.sp)
                     }
                 }
             }
+
             Spacer(modifier = Modifier.height(14.dp))
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF141923))) {
-                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+
+            // Cartão Principal com os 8 Itens Idênticos à Imagem de Referência
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF131722))
+            ) {
+                Column(modifier = Modifier.padding(vertical = 6.dp)) {
                     SettingsSwitchRow(
-                        icon = Icons.Default.BrightnessAuto,
+                        icon = Icons.Default.Layers,
+                        iconTint = Color(0xFF38BDF8),
                         title = "Tema do sistema",
-                        subtitle = "Seguir o tema do Android (${settings.themeMode.label})",
+                        subtitle = "Seguir o tema do Android",
                         checked = settings.themeMode == ThemeMode.SYSTEM,
-                        onCheckedChange = { follow -> onUpdateSettings(settings.copy(themeMode = if (follow) ThemeMode.SYSTEM else ThemeMode.DARK)) }
+                        onCheckedChange = { follow ->
+                            onUpdateSettings(settings.copy(themeMode = if (follow) ThemeMode.SYSTEM else ThemeMode.DARK))
+                        }
                     )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+
                     SettingsSwitchRow(
-                        icon = Icons.Default.AutoAwesome,
+                        icon = Icons.Default.FilterNone,
+                        iconTint = Color(0xFF38BDF8),
                         title = "Ícones dinâmicos",
                         subtitle = "Alterar a cor dos ícones globalmente",
                         checked = settings.dynamicIconsGlobal,
@@ -692,20 +1012,19 @@ fun LauncherSettingsScreen(
                         }
                     )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+
                     SettingsClickRow(
-                        icon = Icons.Default.ColorLens,
+                        icon = Icons.Default.Palette,
+                        iconTint = Color(0xFF818CF8),
                         title = "Pacote de ícones",
-                        subtitle = if (settings.useDynamicColors) "Material You (Dinâmico)" else settings.palettePreset.label,
-                        onClick = {
-                            val presets = PalettePreset.entries
-                            val nextPreset = presets[(presets.indexOf(settings.palettePreset) + 1) % presets.size]
-                            IconResolver.clearCache()
-                            onUpdateSettings(settings.copy(palettePreset = nextPreset, useDynamicColors = (nextPreset == PalettePreset.DYNAMIC)))
-                        }
+                        subtitle = "Material You (Dinâmico)",
+                        onClick = onOpenDynamicIconsScreen
                     )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+
                     SettingsClickRow(
                         icon = Icons.Default.GridView,
+                        iconTint = Color(0xFF60A5FA),
                         title = "Grade da tela inicial",
                         subtitle = "${settings.homeColumns} x ${settings.homeRows}",
                         onClick = {
@@ -715,8 +1034,10 @@ fun LauncherSettingsScreen(
                         }
                     )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+
                     SettingsClickRow(
                         icon = Icons.Default.Apps,
+                        iconTint = Color(0xFF60A5FA),
                         title = "Grade da gaveta de apps",
                         subtitle = "${settings.drawerColumns} x ${settings.drawerRows}",
                         onClick = {
@@ -725,38 +1046,55 @@ fun LauncherSettingsScreen(
                         }
                     )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
-                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.PhotoSizeSelectLarge, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+
+                    // Tamanho dos ícones com barra roxa e percentagem à direita
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(Icons.Default.PhotoSizeSelectLarge, contentDescription = null, tint = Color(0xFFA855F7))
                                 Spacer(modifier = Modifier.width(14.dp))
-                                Text("Tamanho dos ícones", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Tamanho dos ícones", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                                    Slider(
+                                        value = settings.iconScalePercent.toFloat(),
+                                        onValueChange = { onUpdateSettings(settings.copy(iconScalePercent = it.toInt())) },
+                                        valueRange = 80f..120f,
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = Color(0xFF8B5CF6),
+                                            activeTrackColor = Color(0xFF8B5CF6),
+                                            inactiveTrackColor = Color(0xFF2E364F)
+                                        )
+                                    )
+                                }
                             }
-                            Text("${settings.iconScalePercent}%", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("${settings.iconScalePercent}%", color = Color.White, fontSize = 14.sp)
                         }
-                        Slider(
-                            value = settings.iconScalePercent.toFloat(),
-                            onValueChange = { onUpdateSettings(settings.copy(iconScalePercent = it.toInt())) },
-                            valueRange = 80f..120f,
-                            steps = 7
-                        )
                     }
                     HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+
                     SettingsClickRow(
-                        icon = Icons.Default.SwipeUp,
+                        icon = Icons.Default.TouchApp,
+                        iconTint = Color(0xFF2DD4BF),
                         title = "Animações e gestos",
-                        subtitle = "Cima: ${settings.swipeUpAction.label} • Baixo: ${settings.swipeDownAction.label}",
-                        onClick = {
-                            val actions = GestureAction.entries
-                            val nextAction = actions[(actions.indexOf(settings.swipeDownAction) + 1) % actions.size]
-                            onUpdateSettings(settings.copy(swipeDownAction = nextAction))
-                        }
+                        subtitle = "Configurar transições e gestos",
+                        onClick = onOpenGesturesScreen
                     )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+
                     SettingsClickRow(
-                        icon = Icons.Default.MoreHoriz,
+                        icon = Icons.Default.RadioButtonChecked,
+                        iconTint = Color(0xFF38BDF8),
                         title = "Indicadores",
-                        subtitle = settings.indicatorStyle.label,
+                        subtitle = "Estilo dos pontos de página",
                         onClick = {
                             val styles = IndicatorStyle.entries
                             val next = styles[(styles.indexOf(settings.indicatorStyle) + 1) % styles.size]
@@ -765,17 +1103,37 @@ fun LauncherSettingsScreen(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF141923))) {
-                Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                    SettingsClickRow(icon = Icons.Default.CreateNewFolder, title = "Criar pasta na tela inicial", subtitle = "${settings.folders.size} pasta(s) ativa(s)", onClick = onCreateFolder)
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Ações de Pastas, Widgets e Launcher Padrão
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF131722))
+            ) {
+                Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                    SettingsClickRow(
+                        icon = Icons.Default.CreateNewFolder,
+                        iconTint = Color(0xFF60A5FA),
+                        title = "Criar pasta na tela inicial",
+                        subtitle = "${settings.folders.size} pasta(s) ativa(s)",
+                        onClick = onCreateFolder
+                    )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
-                    SettingsClickRow(icon = Icons.Default.Widgets, title = "Adicionar Widget Android real", subtitle = "Vincular widget do sistema à tela inicial", onClick = onPickWidget)
+                    SettingsClickRow(
+                        icon = Icons.Default.Widgets,
+                        iconTint = Color(0xFF818CF8),
+                        title = "Adicionar Widget Android",
+                        subtitle = "Vincular widget real à tela inicial",
+                        onClick = onPickWidget
+                    )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
                     SettingsClickRow(
                         icon = Icons.Default.Home,
+                        iconTint = Color(0xFF34D399),
                         title = "Definir como Launcher Padrão",
-                        subtitle = if (isDefault) "Flow Nova já é o seu launcher padrão" else "Toque para selecionar nas configurações da One UI",
+                        subtitle = if (isDefault) "Ativo como padrão no S23 Ultra" else "Selecionar Flow Nova nas configurações",
                         onClick = { SystemHelper.openDefaultLauncherSettings(context) }
                     )
                 }
@@ -785,33 +1143,238 @@ fun LauncherSettingsScreen(
 }
 
 @Composable
-fun SettingsSwitchRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+fun NativeGesturesShowcaseScreen(
+    settings: LauncherSettings,
+    onUpdateSettings: (LauncherSettings) -> Unit,
+    onClose: () -> Unit
+) {
+    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF040814)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Default.ArrowBackIosNew, contentDescription = "Voltar", tint = Color.White)
+                }
+                Text("Animações e gestos", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            }
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Canvas(modifier = Modifier.size(220.dp)) {
+                    val w = size.width
+                    val h = size.height
+
+                    drawOval(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color(0xFF3B82F6).copy(alpha = 0.55f), Color.Transparent),
+                            center = Offset(w * 0.5f, h * 0.78f),
+                            radius = w * 0.48f
+                        ),
+                        topLeft = Offset(w * 0.05f, h * 0.65f),
+                        size = androidx.compose.ui.geometry.Size(w * 0.9f, h * 0.25f)
+                    )
+
+                    val arrowPath = Path().apply {
+                        moveTo(w * 0.5f, h * 0.15f)
+                        lineTo(w * 0.72f, h * 0.42f)
+                        lineTo(w * 0.58f, h * 0.42f)
+                        lineTo(w * 0.64f, h * 0.78f)
+                        lineTo(w * 0.36f, h * 0.78f)
+                        lineTo(w * 0.42f, h * 0.42f)
+                        lineTo(w * 0.28f, h * 0.42f)
+                        close()
+                    }
+                    drawPath(
+                        path = arrowPath,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color(0xFF60A5FA), Color(0xFF2563EB), Color.Transparent)
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Gestos nativos", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Navegação fluida com gestos\ndo Android",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 16.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        val actions = GestureAction.entries
+                        val next = actions[(actions.indexOf(settings.swipeDownAction) + 1) % actions.size]
+                        onUpdateSettings(settings.copy(swipeDownAction = next))
+                    },
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Text("Deslizar para baixo: ${settings.swipeDownAction.label}", color = Color.White)
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                for (i in 0 until 6) {
+                    val active = i == 1
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 4.dp)
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(if (active) Color(0xFF3B82F6) else Color.White.copy(alpha = 0.25f))
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DynamicIconsShowcaseScreen(
+    settings: LauncherSettings,
+    allApps: List<AppItem>,
+    onUpdateSettings: (LauncherSettings) -> Unit,
+    onClose: () -> Unit
+) {
+    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF07090E)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Default.ArrowBackIosNew, contentDescription = "Voltar", tint = Color.White)
+                }
+                Text("Ícones dinâmicos", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Switch(
+                    checked = settings.dynamicIconsGlobal,
+                    onCheckedChange = {
+                        IconResolver.clearCache()
+                        onUpdateSettings(settings.copy(dynamicIconsGlobal = it))
+                    }
+                )
+            }
+
+            Text(
+                "As cores dos ícones se adaptam\nao seu tema",
+                color = Color.White.copy(alpha = 0.78f),
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PalettePreset.entries.forEach { preset ->
+                    val selected = settings.palettePreset == preset
+                    FilterChip(
+                        selected = selected,
+                        onClick = {
+                            IconResolver.clearCache()
+                            onUpdateSettings(settings.copy(palettePreset = preset, dynamicIconsGlobal = true))
+                        },
+                        label = { Text(preset.label.take(12), fontSize = 11.sp) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(4),
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(allApps.take(20), key = { it.packageName }) { app ->
+                    LauncherAppIcon(
+                        app = app,
+                        settings = settings,
+                        showLabel = false,
+                        forceDynamic = settings.dynamicIconsGlobal,
+                        onClick = {},
+                        onLongClick = {}
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsSwitchRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(icon, contentDescription = null, tint = iconTint)
             Spacer(modifier = Modifier.width(14.dp))
             Column {
                 Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 Text(subtitle, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
             }
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF6366F1)
+            )
+        )
     }
 }
 
 @Composable
-fun SettingsClickRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+fun SettingsClickRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(icon, contentDescription = null, tint = iconTint)
             Spacer(modifier = Modifier.width(14.dp))
             Column {
                 Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
