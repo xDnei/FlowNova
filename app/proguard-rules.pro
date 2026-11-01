@@ -1,0 +1,2 @@
+-keep class com.flownova.launcher.** { *; }
+-dontwarn android.app.StatusBarManager
