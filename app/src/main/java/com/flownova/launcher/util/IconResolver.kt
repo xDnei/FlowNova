@@ -22,7 +22,7 @@ object IconResolver {
         tintColor: Int,
         containerColor: Int
     ): ImageBitmap? {
-        val key = "$packageName\vert{}$useDynamic|$tintColor\vert{}$containerColor"
+        val key = packageName + "_" + useDynamic + "_" + tintColor + "_" + containerColor
         cache.get(key)?.let { return it }
 
         return runCatching {
